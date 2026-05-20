@@ -1,7 +1,10 @@
+using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using NetworkThreats.Data;
+using NetworkThreats.Models;
 using NetworkThreats.Repositories;
 using NetworkThreats.Services;
+using NetworkThreats.Validators;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,6 +42,10 @@ builder.Services.AddScoped<IMitigationService, MitigationService>();
 builder.Services.AddScoped<ISearchService, SearchService>();
 builder.Services.AddScoped<IThreatAnalyzerService, ThreatAnalyzerService>();
 builder.Services.AddScoped<IFileAnalyzerService, FileAnalyzerService>();
+
+// --- Валидация (FluentValidation) ---
+builder.Services.AddScoped<IValidator<Threat>, ThreatValidator>();
+builder.Services.AddScoped<IValidator<ThreatCategory>, ThreatCategoryValidator>();
 
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
