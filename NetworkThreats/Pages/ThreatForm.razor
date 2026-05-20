@@ -3,8 +3,6 @@
 @inject IThreatService ThreatService
 @inject ICategoryService CategoryService
 @inject NavigationManager Nav
-@using NetworkThreats.Models
-@using NetworkThreats.Services
 
 <PageTitle>@(Id == 0 ? "Новая угроза" : "Редактирование угрозы")</PageTitle>
 
@@ -13,12 +11,12 @@
 <div class="row">
     <div class="col-md-6">
         <EditForm Model="model" OnValidSubmit="HandleSubmit">
-            <DataAnnotationsValidator />
-            <ValidationSummary class="text-danger" />
+            <FluentValidationValidator />
 
             <div class="mb-3">
                 <label class="form-label">Название *</label>
                 <InputText class="form-control" @bind-Value="model.Name" />
+                <ValidationMessage For="@(() => model.Name)" class="text-danger small" />
             </div>
 
             <div class="mb-3">
@@ -30,11 +28,13 @@
                         <option value="@cat.Id">@cat.Name</option>
                     }
                 </InputSelect>
+                <ValidationMessage For="@(() => model.CategoryId)" class="text-danger small" />
             </div>
 
             <div class="mb-3">
                 <label class="form-label">Описание *</label>
                 <InputTextArea class="form-control" rows="4" @bind-Value="model.ShortDescription" />
+                <ValidationMessage For="@(() => model.ShortDescription)" class="text-danger small" />
             </div>
 
             <div class="mb-3">
@@ -45,16 +45,19 @@
                     <option value="high">Высокий</option>
                     <option value="critical">Критический</option>
                 </InputSelect>
+                <ValidationMessage For="@(() => model.Severity)" class="text-danger small" />
             </div>
 
             <div class="mb-3">
                 <label class="form-label">Вектор атаки</label>
                 <InputText class="form-control" @bind-Value="model.AttackVector" />
+                <ValidationMessage For="@(() => model.AttackVector)" class="text-danger small" />
             </div>
 
             <div class="mb-3">
                 <label class="form-label">Год первого обнаружения</label>
                 <InputNumber class="form-control" @bind-Value="model.FirstDetectedYear" />
+                <ValidationMessage For="@(() => model.FirstDetectedYear)" class="text-danger small" />
             </div>
 
             <div class="d-flex gap-2">
