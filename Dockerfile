@@ -7,7 +7,7 @@ RUN dotnet restore "NetworkThreats/NetworkThreats.csproj"
 
 COPY . .
 WORKDIR "/src/NetworkThreats"
-RUN dotnet publish "NetworkThreats.csproj" -c Release -o /app/publish --no-restore
+RUN dotnet publish "NetworkThreats.csproj" -c Release -o /app/publish
 
 # ── Stage 2: Runtime ─────────────────────────────────────────
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
