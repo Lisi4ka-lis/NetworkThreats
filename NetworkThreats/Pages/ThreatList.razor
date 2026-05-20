@@ -2,8 +2,6 @@
 @inject IThreatService ThreatService
 @inject ICategoryService CategoryService
 @inject NavigationManager Nav
-@using NetworkThreats.Models
-@using NetworkThreats.Services
 @using Microsoft.AspNetCore.WebUtilities
 
 <PageTitle>Угрозы</PageTitle>
@@ -84,11 +82,45 @@ else
                     <td>
                         <a class="btn btn-sm btn-outline-primary" href="/threats/@threat.Id">Подробнее</a>
                         <a class="btn btn-sm btn-outline-secondary" href="/threats/@threat.Id/edit">Изменить</a>
+                        <button class="btn btn-sm btn-outline-danger"
+                                @onclick="() => ShowDeleteModal(threat)">
+                            Удалить
+                        </button>
                     </td>
                 </tr>
             }
         </tbody>
     </table>
+}
+
+@* ── Модальное окно подтверждения удаления ── *@
+@if (showDeleteModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>
+                        Подтверждение удаления
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="CloseDeleteModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Вы уверены, что хотите удалить угрозу?</p>
+                    <p class="fw-semibold">«@threatToDelete?.Name»</p>
+                    <p class="text-muted small mb-0">Это действие нельзя отменить.</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" @onclick="CloseDeleteModal">Отмена</button>
+                    <button class="btn btn-danger" @onclick="ConfirmDelete">
+                        <i class="bi bi-trash me-1"></i>Удалить
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
 }
 
 @code {
@@ -98,11 +130,13 @@ else
     private string selectedSeverity = "";
     private string? activeCategoryName;
 
+    private bool showDeleteModal;
+    private ThreatDto? threatToDelete;
+
     protected override async Task OnInitializedAsync()
     {
         categories = await CategoryService.GetAllAsync();
 
-        // Читаем categoryId из URL (?categoryId=2)
         var uri = Nav.ToAbsoluteUri(Nav.Uri);
         if (QueryHelpers.ParseQuery(uri.Query).TryGetValue("categoryId", out var val)
             && int.TryParse(val, out var id))
@@ -133,6 +167,26 @@ else
         selectedSeverity = "";
         await ApplyFilter();
         Nav.NavigateTo("/threats");
+    }
+
+    private void ShowDeleteModal(ThreatDto threat)
+    {
+        threatToDelete = threat;
+        showDeleteModal = true;
+    }
+
+    private void CloseDeleteModal()
+    {
+        showDeleteModal = false;
+        threatToDelete = null;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (threatToDelete is null) return;
+        await ThreatService.DeleteAsync(threatToDelete.Id);
+        CloseDeleteModal();
+        await ApplyFilter();
     }
 
     private static string SeverityBadge(string severity) => severity switch
