@@ -1,0 +1,15 @@
+**/.vs
+**/.vscode
+**/.idea
+**/bin
+**/obj
+**/*.user
+**/node_modules
+**/*.db
+**/*.db-shm
+**/*.db-wal
+.git
+.gitignore
+.editorconfig
+README.md
+NetworkThreats.Tests/
