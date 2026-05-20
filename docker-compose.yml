@@ -1,6 +1,36 @@
 version: '3.8'
 
 services:
+
+  db:
+    image: postgres:16-alpine
+    container_name: networkthreats_db
+    environment:
+      POSTGRES_DB: networkthreats
+      POSTGRES_USER: netuser
+      POSTGRES_PASSWORD: netpass123
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U netuser -d networkthreats"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: networkthreats_redis
+    command: redis-server --save 20 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   app:
     build:
       context: .
@@ -8,13 +38,17 @@ services:
     container_name: networkthreats_app
     ports:
       - "8080:8080"
-    volumes:
-      - db_data:/app/data
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionStrings__DefaultConnection=Data Source=/app/data/networkthreats.db
+      - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=networkthreats;Username=netuser;Password=netpass123
+      - ConnectionStrings__Redis=networkthreats_redis:6379
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
-  db_data:
-    driver: local
+  pg_data:
+  redis_data:
