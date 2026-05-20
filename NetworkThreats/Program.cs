@@ -5,9 +5,24 @@ using NetworkThreats.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// --- База данных ---
+// --- База данных: PostgreSQL в Docker, SQLite локально ---
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")!;
+var usePostgres = connectionString.Contains("Host=", StringComparison.OrdinalIgnoreCase);
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+{
+    if (usePostgres)
+        options.UseNpgsql(connectionString);
+    else
+        options.UseSqlite(connectionString);
+});
+
+// --- Кэш: Redis если задана строка подключения, иначе in-memory ---
+var redisConnection = builder.Configuration.GetConnectionString("Redis");
+if (!string.IsNullOrWhiteSpace(redisConnection))
+    builder.Services.AddStackExchangeRedisCache(o => o.Configuration = redisConnection);
+else
+    builder.Services.AddDistributedMemoryCache();
 
 // --- Репозитории ---
 builder.Services.AddScoped<IThreatRepository, ThreatRepository>();
@@ -30,11 +45,14 @@ builder.Services.AddServerSideBlazor();
 
 var app = builder.Build();
 
-// --- Автоматическое применение миграций при старте ---
+// --- Инициализация БД ---
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.Migrate();
+    if (usePostgres)
+        db.Database.EnsureCreated();
+    else
+        db.Database.Migrate();
 }
 
 if (!app.Environment.IsDevelopment())
