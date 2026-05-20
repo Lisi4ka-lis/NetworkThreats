@@ -1,8 +1,15 @@
 # NetworkThreats — Система классификации сетевых угроз
 
+[![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
+[![Blazor](https://img.shields.io/badge/Blazor-Server-512BD4?logo=blazor)](https://blazor.net/)
+[![EF Core](https://img.shields.io/badge/EF_Core-8.0-512BD4?logo=nuget)](https://learn.microsoft.com/ef/core/)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker)](https://www.docker.com/)
+[![GitHub](https://img.shields.io/badge/GitHub-Lisi4ka--lis%2FNetworkThreats-181717?logo=github)](https://github.com/Lisi4ka-lis/NetworkThreats)
+
 Веб-приложение для управления базой знаний по сетевым угрозам, методам атак и способам защиты.
 Реализован анализатор текста по правилам и статический анализатор загружаемых файлов.
 
+**Репозиторий:** https://github.com/Lisi4ka-lis/NetworkThreats  
 **Дисциплина:** «Кроссплатформенная среда исполнения программного обеспечения»  
 **Кафедра КБ-4** — РТУ МИРЭА
 
