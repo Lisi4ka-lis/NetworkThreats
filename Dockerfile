@@ -13,14 +13,17 @@ RUN dotnet publish "NetworkThreats.csproj" -c Release -o /app/publish --no-resto
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
 
-RUN mkdir -p /app/data
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app/publish .
 
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENV ASPNETCORE_URLS=http://+:8080
-ENV ConnectionStrings__DefaultConnection="Data Source=/app/data/networkthreats.db"
 
 EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -sf http://localhost:8080/ || exit 1
 
 ENTRYPOINT ["dotnet", "NetworkThreats.dll"]
