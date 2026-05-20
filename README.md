@@ -24,8 +24,11 @@
 | Платформа | .NET 8, ASP.NET Core |
 | UI | Blazor Server, Razor Components |
 | ORM | Entity Framework Core 8, CodeFirst, Fluent API |
-| База данных | SQLite (переопределяется через env-переменную) |
+| База данных | SQLite (локально), PostgreSQL (Docker) |
+| Кэш | Redis (Docker) / In-Memory (локально) |
+| Валидация | FluentValidation 11 + Blazored.FluentValidation |
 | Контейнеризация | Docker (multi-stage build), Docker Compose |
+| Тестирование | xUnit, Moq, coverlet |
 | Стили | Bootstrap 5, Bootstrap Icons, Google Fonts |
 
 ---
@@ -63,16 +66,20 @@ NetworkThreat/
 │   │   ├── IServices.cs                    # Интерфейсы бизнес-логики
 │   │   └── Services.cs                     # Сервисы: маппинг, анализ, поиск
 │   │
+│   ├── Validators/
+│   │   ├── ThreatValidator.cs              # FluentValidation правила для Threat
+│   │   └── ThreatCategoryValidator.cs      # FluentValidation правила для ThreatCategory
+│   │
 │   ├── Pages/                              # Razor-компоненты (страницы)
-│   │   ├── Index.razor                     # /            — Главная, статистика
-│   │   ├── ThreatList.razor                # /threats     — Список угроз с фильтрами
-│   │   ├── ThreatDetail.razor              # /threats/{id}— Детальная страница угрозы
-│   │   ├── ThreatForm.razor                # /threats/edit— Форма создания/редактирования
-│   │   ├── Categories.razor                # /categories  — Категории угроз
-│   │   ├── Mitigations.razor               # /mitigations — Методы защиты
+│   │   ├── Index.razor                     # /              — Главная, статистика
+│   │   ├── ThreatList.razor                # /threats       — Список угроз + модал удаления
+│   │   ├── ThreatDetail.razor              # /threats/{id}  — Детальная страница угрозы
+│   │   ├── ThreatForm.razor                # /threats/edit  — Форма с FluentValidation
+│   │   ├── Categories.razor                # /categories    — Категории + модал создания
+│   │   ├── Mitigations.razor               # /mitigations   — Методы защиты
 │   │   ├── MitigationDetail.razor          # /mitigations/{id} — Детальная метода
-│   │   ├── Search.razor                    # /search      — Полнотекстовый поиск
-│   │   ├── Analyzer.razor                  # /analyzer    — Анализатор текста
+│   │   ├── Search.razor                    # /search        — Полнотекстовый поиск
+│   │   ├── Analyzer.razor                  # /analyzer      — Анализатор текста
 │   │   └── FileAnalyzer.razor              # /file-analyzer — Анализ файлов
 │   │
 │   ├── Shared/
@@ -84,18 +91,25 @@ NetworkThreat/
 │   │   ├── *_AddFileAnalysis               # Хэши и эвристика файлов
 │   │   └── *_AddThreatDetails              # 1:1 расширение угроз (MITRE, CVSS)
 │   │
-│   ├── wwwroot/
-│   │   └── css/
-│   │       └── site.css                    # Дизайн-система (CSS-переменные, тема)
-│   │
+│   ├── wwwroot/css/site.css                # Дизайн-система (CSS-переменные, тема)
 │   ├── _Imports.razor                      # Глобальные @using для всех компонентов
 │   ├── NavMenu.razor                       # Навигационная боковая панель
 │   ├── Program.cs                          # DI-регистрация, middleware, авто-миграции
 │   ├── appsettings.json                    # Строка подключения, логирование
 │   └── NetworkThreats.csproj               # Зависимости проекта
 │
+├── NetworkThreats.Tests/                   # Проект unit-тестов
+│   ├── ThreatAnalyzerServiceTests.cs       # 16 тестов анализатора текста
+│   ├── FileAnalyzerServiceTests.cs         # 12 тестов анализатора файлов
+│   ├── ThreatServiceTests.cs               # 9 тестов сервиса угроз
+│   ├── CategoryServiceTests.cs             # 7 тестов сервиса категорий
+│   ├── MitigationServiceTests.cs           # 8 тестов сервиса методов защиты
+│   ├── SearchServiceTests.cs               # 9 тестов сервиса поиска
+│   └── NetworkThreats.Tests.csproj
+│
 ├── Dockerfile                              # Multi-stage: sdk:8.0 → aspnet:8.0
-├── docker-compose.yml                      # Сервис app + том db_data для SQLite
+├── docker-compose.yml                      # 3 сервиса: app + PostgreSQL + Redis
+├── .dockerignore                           # Исключения для Docker build context
 └── .editorconfig                           # Единые правила форматирования C#/Razor
 ```
 
@@ -206,7 +220,8 @@ erDiagram
 | `AddFileAnalysis` | Таблицы `known_malicious_hashes` и `file_heuristics`, seed-данные |
 | `AddThreatDetails` | Таблица `threat_details` (1:1), MITRE и CVSS для 10 угроз |
 
-Миграции применяются **автоматически** при каждом запуске через `db.Database.Migrate()` в `Program.cs`.
+Миграции применяются **автоматически** при каждом запуске через `db.Database.Migrate()` в `Program.cs`.  
+В Docker (PostgreSQL) схема создаётся через `db.Database.EnsureCreated()`.
 
 ---
 
@@ -215,14 +230,39 @@ erDiagram
 | Раздел | Описание |
 |---|---|
 | **Главная** | Статистика: кол-во угроз, категорий, методов защиты |
-| **Угрозы** | Список с фильтрацией по категории и критичности |
+| **Угрозы** | Список с фильтрацией по категории и критичности, удаление через модальное окно |
 | **Детальная угрозы** | Описание, MITRE ATT&CK, CVSS, реальные атаки, методы защиты |
-| **Категории** | Карточки категорий, клик фильтрует список угроз |
-| **Методы защиты** | Список с фильтрацией по типу (preventive/detective/corrective) |
+| **Форма угрозы** | Создание/редактирование с валидацией FluentValidation (per-field сообщения) |
+| **Категории** | Карточки категорий, добавление новой категории через модальное окно |
+| **Методы защиты** | Список с фильтрацией по типу (preventive / detective / corrective) |
 | **Детальная метода** | Шаги реализации, список закрываемых угроз |
 | **Поиск** | Полнотекстовый поиск по угрозам, категориям и методам |
 | **Анализатор текста** | Поиск совпадений с индикаторами угроз (keyword, regex, domain, filepath) |
 | **Анализ файлов** | SHA-256/MD5 хэш-сверка, эвристика, извлечение строк |
+
+---
+
+## Тестирование
+
+Unit-тесты реализованы с использованием **xUnit** и **Moq** (мокирование репозиториев).
+
+| Класс тестов | Тестов | Покрытие |
+|---|---|---|
+| `ThreatAnalyzerServiceTests` | 16 | Keyword/regex совпадения, группировка, сортировка, метки типов |
+| `FileAnalyzerServiceTests` | 12 | Хэш-сверка, эвристика, извлечение строк, приоритет риска |
+| `ThreatServiceTests` | 9 | Маппинг в DTO, фильтрация, CRUD делегация |
+| `CategoryServiceTests` | 7 | Счётчик угроз в DTO, CRUD делегация |
+| `MitigationServiceTests` | 8 | Маппинг, фильтрация по типу, CRUD |
+| `SearchServiceTests` | 9 | Агрегация, URL/тип результатов, граничные случаи |
+| **Итого** | **61** | **97.3% lines / 87.1% branches / 100% methods** |
+
+```bash
+# Запуск тестов
+dotnet test NetworkThreats.Tests/NetworkThreats.Tests.csproj
+
+# С отчётом покрытия
+dotnet test NetworkThreats.Tests/NetworkThreats.Tests.csproj /p:CollectCoverage=true /p:CoverletOutputFormat=lcov /p:CoverletOutput=./coverage/
+```
 
 ---
 
@@ -233,69 +273,49 @@ erDiagram
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) *(для запуска через Docker)*
 
-### Локально
+### Локально (SQLite)
 
 ```bash
 # 1. Клонировать репозиторий
-git clone https://github.com/username/NetworkThreats.git
+git clone https://github.com/Lisi4ka-lis/NetworkThreats.git
 cd NetworkThreats
 
 # 2. Восстановить зависимости
 dotnet restore NetworkThreats/NetworkThreats.csproj
 
-# 3. Применить миграции и создать БД
-dotnet ef database update --project NetworkThreats
-
-# 4. Запустить приложение
+# 3. Запустить приложение (миграции применяются автоматически)
 dotnet run --project NetworkThreats
 ```
 
-Приложение откроется по адресу: **https://localhost:7001** (или http://localhost:5001)
-
-> Миграции применяются автоматически при запуске — шаг 3 можно пропустить.
+Приложение: **http://localhost:5000**
 
 ### Через Docker Compose (рекомендуется)
 
+Запускает три контейнера: приложение + PostgreSQL + Redis.
+
 ```bash
-# Сборка образа и запуск контейнера (app + PostgreSQL + Redis)
+# Сборка и запуск
 docker-compose up -d --build
 
 # Просмотр логов
 docker-compose logs -f
 
-# Остановка
+# Остановка (данные БД сохраняются)
 docker-compose down
 ```
 
 Приложение: **http://localhost:8080**  
-База данных сохраняется в именованном томе `pg_data` и не теряется при перезапуске.
+Данные PostgreSQL сохраняются в именованном томе `pg_data`.
 
 ### Готовый образ с Docker Hub
 
 ```bash
-# Скачать и запустить готовый образ (SQLite, без PostgreSQL)
 docker pull lisenjik/network-threats-api:latest
 
-docker run -d \
-  -p 8080:8080 \
-  --name networkthreats \
-  lisenjik/network-threats-api:latest
+docker run -d -p 8080:8080 --name networkthreats lisenjik/network-threats-api:latest
 ```
 
 Образ: **https://hub.docker.com/r/lisenjik/network-threats-api**
-
-### Только Docker (без Compose)
-
-```bash
-# Собрать образ из исходников
-docker build -t networkthreats:latest .
-
-# Запустить контейнер
-docker run -d \
-  -p 8080:8080 \
-  --name networkthreats \
-  networkthreats:latest
-```
 
 ---
 
@@ -303,15 +323,12 @@ docker run -d \
 
 | Параметр | По умолчанию | Описание |
 |---|---|---|
-| `ConnectionStrings:DefaultConnection` | `Data Source=networkthreats.db` | Путь к SQLite-файлу |
+| `ConnectionStrings:DefaultConnection` | `Data Source=networkthreats.db` | SQLite локально; `Host=...` → PostgreSQL |
+| `ConnectionStrings:Redis` | *(пусто)* | Адрес Redis; пусто → in-memory кэш |
 | `ASPNETCORE_ENVIRONMENT` | `Development` | Среда выполнения |
 | `ASPNETCORE_URLS` | `http://+:8080` | Порт в контейнере |
 
-Для переопределения строки подключения в Docker:
-```yaml
-environment:
-  - ConnectionStrings__DefaultConnection=Data Source=/app/data/custom.db
-```
+Провайдер БД определяется автоматически: если строка подключения содержит `Host=` — используется PostgreSQL, иначе SQLite.
 
 ---
 
@@ -323,6 +340,7 @@ environment:
 | `/threats` | Список угроз |
 | `/threats?categoryId={id}` | Угрозы по категории |
 | `/threats/{id}` | Детальная страница угрозы |
+| `/threats/create` | Создание угрозы |
 | `/threats/{id}/edit` | Редактирование угрозы |
 | `/categories` | Категории |
 | `/mitigations` | Методы защиты |
