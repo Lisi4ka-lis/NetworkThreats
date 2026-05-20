@@ -1,0 +1,45 @@
+@page "/categories"
+@inject ICategoryService CategoryService
+@inject NavigationManager Nav
+@using NetworkThreats.Models
+@using NetworkThreats.Services
+
+<PageTitle>Категории угроз</PageTitle>
+
+<h3 class="mb-4">Категории угроз</h3>
+
+@if (categories is null)
+{
+    <p>Загрузка...</p>
+}
+else
+{
+    <div class="row row-cols-1 row-cols-md-2 g-4">
+        @foreach (var cat in categories)
+        {
+            <div class="col">
+                <div class="card h-100 category-card"
+                     style="cursor:pointer"
+                     @onclick='() => Nav.NavigateTo("/threats?categoryId=" + cat.Id)'>
+                    <div class="card-body">
+                        <h5 class="card-title">@cat.Name</h5>
+                        <p class="card-text text-muted">@(cat.Description ?? "—")</p>
+                    </div>
+                    <div class="card-footer d-flex justify-content-between align-items-center">
+                        <span class="badge bg-primary">@cat.ThreatsCount угроз</span>
+                        <span class="text-muted small">
+                            Смотреть угрозы <i class="bi bi-arrow-right ms-1"></i>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private IEnumerable<ThreatCategoryDto>? categories;
+
+    protected override async Task OnInitializedAsync() =>
+        categories = await CategoryService.GetAllAsync();
+}

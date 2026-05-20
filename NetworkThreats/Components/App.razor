@@ -1,0 +1,15 @@
+@namespace NetworkThreats.Components
+@using NetworkThreats.Shared
+
+<Router AppAssembly="@typeof(App).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <PageTitle>Страница не найдена</PageTitle>
+        <LayoutView Layout="@typeof(MainLayout)">
+            <p role="alert">Страница не найдена.</p>
+        </LayoutView>
+    </NotFound>
+</Router>

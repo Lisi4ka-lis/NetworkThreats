@@ -1,0 +1,38 @@
+## Claude Code (IDE internal data)
+.claude/
+
+## .NET / ASP.NET Core
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.vscode/
+*.DotSettings.user
+
+## EF Core — база данных (создаётся автоматически при запуске)
+*.db
+*.db-shm
+*.db-wal
+
+## Секреты и конфиденциальные данные
+**/appsettings.Production.json
+**/secrets.json
+**/*.pfx
+**/*.p12
+
+## Docker
+.docker/
+
+## OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+## IDE
+.idea/
+*.iml
+*.swp
+
+## Публикация
+**/publish/

@@ -1,0 +1,76 @@
+@page "/mitigations"
+@inject IMitigationService MitigationService
+@using NetworkThreats.Models
+@using NetworkThreats.Services
+
+<PageTitle>Методы защиты</PageTitle>
+
+<h3>Методы защиты от сетевых угроз</h3>
+
+<div class="mb-3">
+    <select class="form-select w-auto d-inline-block" @bind="selectedType" @bind:after="ApplyFilter">
+        <option value="">Все типы</option>
+        <option value="preventive">Превентивные</option>
+        <option value="detective">Детективные</option>
+        <option value="corrective">Корректирующие</option>
+    </select>
+</div>
+
+@if (methods is null)
+{
+    <p>Загрузка...</p>
+}
+else
+{
+    <table class="table table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th>Метод защиты</th>
+                <th>Тип</th>
+                <th>Описание</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var m in methods)
+            {
+                <tr>
+                    <td><strong>@m.Name</strong></td>
+                    <td><span class="badge @TypeBadge(m.Type)">@TypeLabel(m.Type)</span></td>
+                    <td>@(m.ShortDescription ?? "—")</td>
+                    <td><a class="btn btn-sm btn-outline-primary" href="/mitigations/@m.Id">Подробнее</a></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private IEnumerable<MitigationMethodDto>? methods;
+    private string selectedType = "";
+
+    protected override async Task OnInitializedAsync() => await ApplyFilter();
+
+    private async Task ApplyFilter()
+    {
+        methods = string.IsNullOrEmpty(selectedType)
+            ? await MitigationService.GetAllAsync()
+            : await MitigationService.GetByTypeAsync(selectedType);
+    }
+
+    private static string TypeBadge(string type) => type switch
+    {
+        "preventive"  => "bg-success",
+        "detective"   => "bg-warning text-dark",
+        "corrective"  => "bg-info text-dark",
+        _             => "bg-secondary"
+    };
+
+    private static string TypeLabel(string type) => type switch
+    {
+        "preventive"  => "Превентивный",
+        "detective"   => "Детективный",
+        "corrective"  => "Корректирующий",
+        _             => type
+    };
+}

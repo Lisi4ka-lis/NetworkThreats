@@ -1,0 +1,153 @@
+@page "/mitigations/{Id:int}"
+@inject IMitigationService MitigationService
+@inject NavigationManager Nav
+@using NetworkThreats.Models
+@using NetworkThreats.Services
+
+<PageTitle>@(method?.Name ?? "Метод защиты")</PageTitle>
+
+@if (method is null)
+{
+    <p>Загрузка...</p>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="mb-1">@method.Name</h3>
+            <span class="badge @TypeBadge(method.Type) me-2">@TypeLabel(method.Type)</span>
+        </div>
+        <a class="btn btn-outline-primary" href="/mitigations">← К списку</a>
+    </div>
+
+    <div class="row g-4">
+        <!-- Описание и шаги -->
+        <div class="col-md-7">
+            @if (!string.IsNullOrEmpty(method.ShortDescription))
+            {
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <h5 class="card-title">Описание</h5>
+                        <p class="mb-0">@method.ShortDescription</p>
+                    </div>
+                </div>
+            }
+
+            @if (method.MitigationSteps.Any())
+            {
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-list-ol me-2"></i>Шаги реализации
+                    </div>
+                    <div class="card-body p-0">
+                        <ol class="list-group list-group-flush list-group-numbered">
+                            @foreach (var step in method.MitigationSteps)
+                            {
+                                <li class="list-group-item">
+                                    <div class="fw-semibold">@step.Action</div>
+                                    <div class="d-flex gap-3 mt-1">
+                                        @if (!string.IsNullOrEmpty(step.ApplicableOs))
+                                        {
+                                            <small class="text-muted">
+                                                <i class="bi bi-display me-1"></i>@step.ApplicableOs
+                                            </small>
+                                        }
+                                        @if (!string.IsNullOrEmpty(step.CommandExample))
+                                        {
+                                            <code class="small bg-light px-2 py-1 rounded">@step.CommandExample</code>
+                                        }
+                                    </div>
+                                </li>
+                            }
+                        </ol>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Угрозы, которые закрывает этот метод -->
+        <div class="col-md-5">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-shield-exclamation me-2 text-danger"></i>Угрозы, которые закрывает
+                </div>
+                @if (!method.ThreatMitigations.Any())
+                {
+                    <div class="card-body">
+                        <p class="text-muted mb-0">Нет связанных угроз.</p>
+                    </div>
+                }
+                else
+                {
+                    <ul class="list-group list-group-flush">
+                        @foreach (var tm in method.ThreatMitigations)
+                        {
+                            <li class="list-group-item list-group-item-action px-3 py-2">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <a href="/threats/@tm.ThreatId" class="fw-semibold text-decoration-none link-dark">
+                                        @tm.Threat.Name
+                                    </a>
+                                    <span class="badge @SeverityBadge(tm.Threat.Severity) ms-2 flex-shrink-0">
+                                        @SeverityLabel(tm.Threat.Severity)
+                                    </span>
+                                </div>
+                                @if (!string.IsNullOrEmpty(tm.Effectiveness))
+                                {
+                                    <small class="text-muted">Эффективность: @EffLabel(tm.Effectiveness)</small>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private MitigationMethod? method;
+
+    protected override async Task OnParametersSetAsync() =>
+        method = await MitigationService.GetFullAsync(Id);
+
+    private static string TypeBadge(string type) => type switch
+    {
+        "preventive"  => "bg-success",
+        "detective"   => "bg-warning text-dark",
+        "corrective"  => "bg-info text-dark",
+        _             => "bg-secondary"
+    };
+
+    private static string TypeLabel(string type) => type switch
+    {
+        "preventive"  => "Превентивный",
+        "detective"   => "Детективный",
+        "corrective"  => "Корректирующий",
+        _             => type
+    };
+
+    private static string SeverityBadge(string s) => s switch
+    {
+        "critical" => "bg-danger",
+        "high"     => "bg-warning text-dark",
+        "medium"   => "bg-info text-dark",
+        _          => "bg-secondary"
+    };
+
+    private static string SeverityLabel(string s) => s switch
+    {
+        "critical" => "Критический",
+        "high"     => "Высокий",
+        "medium"   => "Средний",
+        _          => "Низкий"
+    };
+
+    private static string EffLabel(string? e) => e switch
+    {
+        "high"   => "высокая",
+        "medium" => "средняя",
+        _        => e ?? ""
+    };
+}

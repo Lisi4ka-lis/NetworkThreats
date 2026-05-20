@@ -1,0 +1,189 @@
+@page "/search"
+@inject ISearchService SearchService
+@using NetworkThreats.Models
+@using NetworkThreats.Services
+
+<PageTitle>Поиск</PageTitle>
+
+<h3 class="mb-4">Поиск по базе знаний</h3>
+
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="input-group input-group-lg">
+            <span class="input-group-text bg-white">
+                <i class="bi bi-search text-muted"></i>
+            </span>
+            <input class="form-control border-start-0"
+                   type="text"
+                   placeholder="Введите запрос: «фишинг», «SQL», «brute force»…"
+                   @bind="query"
+                   @bind:event="oninput"
+                   @onkeydown="OnKeyDown" />
+            <button class="btn btn-primary px-4" @onclick="DoSearch">Найти</button>
+        </div>
+    </div>
+</div>
+
+@if (searched && string.IsNullOrWhiteSpace(query))
+{
+    <div class="alert alert-warning">Введите запрос для поиска.</div>
+}
+else if (searched && threatResults is not null)
+{
+    var total = threatResults.Count + mitigationResults.Count + categoryResults.Count;
+
+    @if (total == 0)
+    {
+        <div class="alert alert-info">
+            По запросу <strong>«@query»</strong> ничего не найдено.
+        </div>
+    }
+    else
+    {
+        <p class="text-muted mb-3">
+            Найдено результатов: <strong>@total</strong> по запросу «@query»
+        </p>
+
+        @if (threatResults.Count > 0)
+        {
+            <h5 class="mb-2"><i class="bi bi-shield-exclamation text-danger me-2"></i>Угрозы (@threatResults.Count)</h5>
+            <div class="row g-3 mb-4">
+                @foreach (var r in threatResults)
+                {
+                    <div class="col-md-6">
+                        <div class="card h-100 border-0 shadow-sm">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-1">
+                                    <a href="@r.Url" class="fw-semibold text-decoration-none link-dark fs-6">@r.Name</a>
+                                    @if (!string.IsNullOrEmpty(r.Badge))
+                                    {
+                                        <span class="badge @SeverityBadge(r.Badge) ms-2 flex-shrink-0">@SeverityLabel(r.Badge)</span>
+                                    }
+                                </div>
+                                <p class="text-muted small mb-0">@Truncate(r.Description, 120)</p>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (mitigationResults.Count > 0)
+        {
+            <h5 class="mb-2"><i class="bi bi-shield-check text-success me-2"></i>Методы защиты (@mitigationResults.Count)</h5>
+            <div class="row g-3 mb-4">
+                @foreach (var r in mitigationResults)
+                {
+                    <div class="col-md-6">
+                        <div class="card h-100 border-0 shadow-sm">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-1">
+                                    <a href="@r.Url" class="fw-semibold text-decoration-none link-dark fs-6">@r.Name</a>
+                                    @if (!string.IsNullOrEmpty(r.Badge))
+                                    {
+                                        <span class="badge @TypeBadge(r.Badge) ms-2 flex-shrink-0">@TypeLabel(r.Badge)</span>
+                                    }
+                                </div>
+                                <p class="text-muted small mb-0">@Truncate(r.Description, 120)</p>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (categoryResults.Count > 0)
+        {
+            <h5 class="mb-2"><i class="bi bi-tags text-primary me-2"></i>Категории (@categoryResults.Count)</h5>
+            <div class="row g-3 mb-4">
+                @foreach (var r in categoryResults)
+                {
+                    <div class="col-md-6">
+                        <div class="card h-100 border-0 shadow-sm">
+                            <div class="card-body">
+                                <a href="@r.Url" class="fw-semibold text-decoration-none link-dark fs-6 d-block mb-1">@r.Name</a>
+                                <p class="text-muted small mb-0">@Truncate(r.Description, 120)</p>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    }
+}
+else if (!searched)
+{
+    <div class="text-muted">
+        <i class="bi bi-lightbulb me-2"></i>
+        Попробуйте:
+        <a @onclick='() => QuickSearch("SQL")' class="link-primary" style="cursor:pointer">SQL</a>,
+        <a @onclick='() => QuickSearch("фишинг")' class="link-primary" style="cursor:pointer">фишинг</a>,
+        <a @onclick='() => QuickSearch("шифрование")' class="link-primary" style="cursor:pointer">шифрование</a>
+    </div>
+}
+
+@code {
+    private string query = "";
+    private bool searched;
+
+    private List<SearchResultDto> threatResults = [];
+    private List<SearchResultDto> mitigationResults = [];
+    private List<SearchResultDto> categoryResults = [];
+
+    private async Task DoSearch()
+    {
+        searched = true;
+        if (string.IsNullOrWhiteSpace(query)) return;
+
+        var all = await SearchService.SearchAsync(query.Trim());
+        threatResults     = all.Where(r => r.EntityType == "Угроза").ToList();
+        mitigationResults = all.Where(r => r.EntityType == "Метод защиты").ToList();
+        categoryResults   = all.Where(r => r.EntityType == "Категория").ToList();
+    }
+
+    private async Task QuickSearch(string q)
+    {
+        query = q;
+        await DoSearch();
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await DoSearch();
+    }
+
+    private static string Truncate(string? text, int max) =>
+        text is null ? "" : text.Length <= max ? text : text[..max] + "…";
+
+    private static string SeverityBadge(string s) => s switch
+    {
+        "critical" => "bg-danger",
+        "high"     => "bg-warning text-dark",
+        "medium"   => "bg-info text-dark",
+        _          => "bg-secondary"
+    };
+
+    private static string SeverityLabel(string s) => s switch
+    {
+        "critical" => "Критический",
+        "high"     => "Высокий",
+        "medium"   => "Средний",
+        _          => "Низкий"
+    };
+
+    private static string TypeBadge(string t) => t switch
+    {
+        "preventive" => "bg-success",
+        "detective"  => "bg-warning text-dark",
+        "corrective" => "bg-info text-dark",
+        _            => "bg-secondary"
+    };
+
+    private static string TypeLabel(string t) => t switch
+    {
+        "preventive" => "Превентивный",
+        "detective"  => "Детективный",
+        "corrective" => "Корректирующий",
+        _            => t
+    };
+}

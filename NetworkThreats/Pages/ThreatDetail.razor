@@ -1,0 +1,154 @@
+@page "/threats/{Id:int}"
+@inject IThreatService ThreatService
+@inject NavigationManager Nav
+@using NetworkThreats.Models
+@using NetworkThreats.Services
+
+<PageTitle>@(threat?.Name ?? "Угроза")</PageTitle>
+
+@if (threat is null)
+{
+    <p>Загрузка...</p>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3>@threat.Name</h3>
+        <div>
+            <a class="btn btn-outline-secondary" href="/threats/@threat.Id/edit">Редактировать</a>
+            <a class="btn btn-outline-primary ms-2" href="/threats">← К списку</a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">Описание</h5>
+                    <p>@threat.ShortDescription</p>
+                    <hr />
+                    <dl class="row">
+                        <dt class="col-sm-4">Категория</dt>
+                        <dd class="col-sm-8">@threat.CategoryName</dd>
+                        <dt class="col-sm-4">Уровень угрозы</dt>
+                        <dd class="col-sm-8"><span class="badge @SeverityBadge(threat.Severity)">@threat.Severity</span></dd>
+                        <dt class="col-sm-4">Вектор атаки</dt>
+                        <dd class="col-sm-8">@(threat.AttackVector ?? "—")</dd>
+                        <dt class="col-sm-4">Год обнаружения</dt>
+                        <dd class="col-sm-8">@(threat.FirstDetectedYear?.ToString() ?? "—")</dd>
+                        @if (threat.ThreatDetail is not null)
+                        {
+                            <dt class="col-sm-4">MITRE ATT&amp;CK</dt>
+                            <dd class="col-sm-8">
+                                <code>@threat.ThreatDetail.MitreTechniqueId</code>
+                            </dd>
+                            <dt class="col-sm-4">CVSS Score</dt>
+                            <dd class="col-sm-8">
+                                <span class="badge @CvssBadge(threat.ThreatDetail.CvssScore)">
+                                    @(threat.ThreatDetail.CvssScore?.ToString("F1") ?? "—")
+                                </span>
+                            </dd>
+                            <dt class="col-sm-4">Затронутые системы</dt>
+                            <dd class="col-sm-8">@(threat.ThreatDetail.AffectedSystems ?? "—")</dd>
+                            <dt class="col-sm-4">Рекомендация</dt>
+                            <dd class="col-sm-8">@(threat.ThreatDetail.RecommendedAction ?? "—")</dd>
+                        }
+                    </dl>
+                </div>
+            </div>
+
+            @if (threat.AttackExamples.Any())
+            {
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title">Реальные примеры атак</h5>
+                        <table class="table table-sm">
+                            <thead>
+                                <tr><th>Название</th><th>Год</th><th>Последствия</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var ex in threat.AttackExamples)
+                                {
+                                    <tr>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(ex.UrlReference))
+                                            { <a href="@ex.UrlReference" target="_blank">@ex.Name</a> }
+                                            else { @ex.Name }
+                                        </td>
+                                        <td>@(ex.Year?.ToString() ?? "—")</td>
+                                        <td>@(ex.ImpactEstimate ?? "—")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="col-md-4">
+            @if (threat.ThreatMitigations.Any())
+            {
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Методы защиты</h5>
+                        @foreach (var tm in threat.ThreatMitigations)
+                        {
+                            <div class="mb-3 pb-2 border-bottom">
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <a href="/mitigations/@tm.MitigationId" class="fw-semibold text-decoration-none link-primary">
+                                        @tm.MitigationMethod.Name
+                                    </a>
+                                    <span class="badge @EffBadge(tm.Effectiveness)">@EffLabel(tm.Effectiveness)</span>
+                                </div>
+                                @if (!string.IsNullOrEmpty(tm.Notes))
+                                {
+                                    <p class="text-muted small mb-0">@tm.Notes</p>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private NetworkThreats.Models.Threat? threat;
+
+    protected override async Task OnParametersSetAsync() =>
+        threat = await ThreatService.GetWithDetailsAsync(Id);
+
+    private static string SeverityBadge(string severity) => severity switch
+    {
+        "critical" => "bg-danger",
+        "high"     => "bg-warning text-dark",
+        "medium"   => "bg-info text-dark",
+        _          => "bg-secondary"
+    };
+
+    private static string EffBadge(string? e) => e switch
+    {
+        "high"   => "bg-success",
+        "medium" => "bg-warning text-dark",
+        _        => "bg-secondary"
+    };
+
+    private static string EffLabel(string? e) => e switch
+    {
+        "high"   => "Высокая эффективность",
+        "medium" => "Средняя эффективность",
+        _        => e ?? ""
+    };
+
+    private static string CvssBadge(double? score) => score switch
+    {
+        >= 9.0 => "bg-danger",
+        >= 7.0 => "bg-warning text-dark",
+        >= 4.0 => "bg-info text-dark",
+        _      => "bg-secondary"
+    };
+}

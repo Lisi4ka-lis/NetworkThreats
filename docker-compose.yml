@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: networkthreats_app
+    ports:
+      - "8080:8080"
+    volumes:
+      - db_data:/app/data
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Data Source=/app/data/networkthreats.db
+    restart: unless-stopped
+
+volumes:
+  db_data:
+    driver: local

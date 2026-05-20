@@ -1,0 +1,282 @@
+@page "/file-analyzer"
+@inject IFileAnalyzerService FileAnalyzerSvc
+@using NetworkThreats.Models
+@using NetworkThreats.Services
+@using Microsoft.AspNetCore.Components.Forms
+
+<PageTitle>Анализ файлов</PageTitle>
+
+<div class="mb-4">
+    <h3 class="mb-1">Анализ файлов</h3>
+    <p class="text-muted">Загрузите подозрительный файл — система проверит хэш, извлечёт строки и проверит по эвристическим правилам.</p>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body">
+                <label class="form-label fw-semibold">Выбрать файл для анализа</label>
+                <InputFile OnChange="HandleFile"
+                           accept=".exe,.dll,.pdf,.doc,.docx,.docm,.xls,.xlsx,.xlsm,.js,.ps1,.bat,.cmd,.vbs,.sh,.php,.py,.zip,.rar,.7z,.txt"
+                           class="form-control mb-2" />
+                <div class="text-muted small">Поддерживаемые типы: .exe, .dll, .pdf, .doc, .js, .ps1, .bat, .sh и другие. Максимум 10 МБ.</div>
+
+                @if (errorMessage is not null)
+                {
+                    <div class="alert alert-danger py-2 mt-2">@errorMessage</div>
+                }
+
+                @if (isLoading)
+                {
+                    <div class="d-flex align-items-center gap-2 text-muted mt-3">
+                        <span class="spinner-border spinner-border-sm"></span>
+                        Анализирую файл...
+                    </div>
+                }
+            </div>
+        </div>
+
+        @if (result is not null)
+        {
+            <!-- Информация о файле -->
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header fw-semibold"><i class="bi bi-file-earmark me-2"></i>Информация о файле</div>
+                <div class="card-body p-0">
+                    <table class="table table-sm mb-0">
+                        <tbody>
+                            <tr><th style="width:160px">Имя файла</th><td><strong>@result.FileName</strong></td></tr>
+                            <tr><th>Размер</th><td>@FormatSize(result.FileSize)</td></tr>
+                            <tr><th>Расширение</th><td><code>@result.FileExtension</code></td></tr>
+                            <tr><th>SHA-256</th><td><code class="small">@result.Sha256</code></td></tr>
+                            <tr><th>MD5</th><td><code class="small">@result.Md5</code></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Вердикт -->
+            @if (!result.ThreatDetected)
+            {
+                <div class="alert border-0 shadow-sm d-flex align-items-center gap-3 py-3 mb-3" style="background:#f0faf4; border-left:4px solid #28a745 !important;">
+                    <i class="bi bi-shield-check text-success fs-2"></i>
+                    <div>
+                        <div class="fw-semibold text-success">Угроз не обнаружено</div>
+                        <div class="text-muted small">Хэш не найден в базе вредоносных файлов. Подозрительных признаков не обнаружено.</div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="alert border-0 shadow-sm d-flex align-items-center gap-3 py-3 mb-3" style="background:#fff5f5; border-left:4px solid #dc3545 !important;">
+                    <i class="bi bi-shield-exclamation text-danger fs-2"></i>
+                    <div>
+                        <div class="fw-semibold text-danger">
+                            Обнаружены угрозы — риск:
+                            <span class="badge @RiskBadge(result.OverallRisk)">@RiskLabel(result.OverallRisk)</span>
+                        </div>
+                        <div class="text-muted small">
+                            @if (result.IsKnownMalicious) { <span>Файл найден в базе вредоносных хэшей. </span> }
+                            @if (result.HeuristicFindings.Any()) { <span>Эвристика: @result.HeuristicFindings.Count совпадений.</span> }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Известный вредоносный файл -->
+                @if (result.IsKnownMalicious && result.KnownHash is not null)
+                {
+                    <div class="card border-0 shadow-sm mb-3" style="border-left:4px solid #dc3545 !important;">
+                        <div class="card-header d-flex align-items-center gap-2" style="background:#fff5f5;">
+                            <i class="bi bi-exclamation-octagon-fill text-danger"></i>
+                            <span class="fw-semibold">Известный вредоносный файл</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="fw-semibold">@result.KnownHash.ThreatName</div>
+                            @if (result.KnownHash.Description is not null)
+                            {
+                                <div class="text-muted small mt-1">@result.KnownHash.Description</div>
+                            }
+                            <div class="mt-2 d-flex gap-2">
+                                <span class="badge @SeverityBadge(result.KnownHash.Severity)">@SeverityLabel(result.KnownHash.Severity)</span>
+                                @if (result.KnownHash.FileType is not null)
+                                {
+                                    <span class="badge bg-secondary">@result.KnownHash.FileType</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <!-- Эвристические находки -->
+                @if (result.HeuristicFindings.Any())
+                {
+                    <div class="card border-0 shadow-sm mb-3">
+                        <div class="card-header fw-semibold">
+                            <i class="bi bi-bug me-2"></i>Эвристический анализ
+                            <span class="badge bg-warning text-dark ms-2">@result.HeuristicFindings.Count</span>
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-sm mb-0">
+                                <thead>
+                                    <tr>
+                                        <th style="width:180px">Паттерн</th>
+                                        <th>Описание</th>
+                                        <th style="width:130px">Категория</th>
+                                        <th style="width:80px">Риск</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var f in result.HeuristicFindings.OrderByDescending(x => RiskOrder(x.RiskLevel)))
+                                    {
+                                        <tr>
+                                            <td><code class="small">@f.Pattern</code></td>
+                                            <td class="text-muted small">@f.Description</td>
+                                            <td><span class="badge bg-light text-dark border small">@f.Category</span></td>
+                                            <td><span class="badge @RiskBadge(f.RiskLevel)">@RiskLabel(f.RiskLevel)</span></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            }
+
+            <!-- Извлечённые строки -->
+            @if (result.ExtractedStrings.Any())
+            {
+                <div class="card border-0 shadow-sm mb-3">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span class="fw-semibold"><i class="bi bi-card-text me-2"></i>Извлечённые строки</span>
+                        <small class="text-muted">показано @result.ExtractedStrings.Count</small>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="bg-dark text-light rounded p-2 font-monospace"
+                             style="max-height:220px; overflow-y:auto; font-size:0.75rem; line-height:1.4;">
+                            @foreach (var s in result.ExtractedStrings)
+                            {
+                                <div>@s</div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+    <!-- Справка -->
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header"><i class="bi bi-info-circle me-2"></i>Что проверяет анализатор</div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item">
+                        <div class="fw-semibold small">🔑 Хэш-сверка</div>
+                        <div class="text-muted" style="font-size:0.8rem">SHA-256 и MD5 сравниваются с базой известных вредоносных файлов (WannaCry, NotPetya, EICAR и др.)</div>
+                    </li>
+                    <li class="list-group-item">
+                        <div class="fw-semibold small">🔍 Эвристика</div>
+                        <div class="text-muted" style="font-size:0.8rem">Поиск подозрительных строк: инъекция процессов, PowerShell, download cradles, закрепление, антиотладка</div>
+                    </li>
+                    <li class="list-group-item">
+                        <div class="fw-semibold small">📝 Извлечение строк</div>
+                        <div class="text-muted" style="font-size:0.8rem">Из бинарного содержимого извлекаются печатаемые ASCII-строки (аналог утилиты strings)</div>
+                    </li>
+                    <li class="list-group-item">
+                        <div class="fw-semibold small">📊 Оценка риска</div>
+                        <div class="text-muted" style="font-size:0.8rem">Итоговый уровень: критический / высокий / средний / низкий / безопасно</div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        <div class="card border-0 shadow-sm">
+            <div class="card-header"><i class="bi bi-exclamation-triangle me-2"></i>Важно</div>
+            <div class="card-body">
+                <p class="text-muted small mb-0">
+                    Файл обрабатывается локально на сервере. Данные не передаются во внешние системы.
+                    Анализатор носит образовательный характер и не заменяет профессиональные антивирусные решения.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private FileAnalysisResultDto? result;
+    private bool isLoading;
+    private string? errorMessage;
+    private const long MaxFileSize = 10 * 1024 * 1024;
+
+    private async Task HandleFile(InputFileChangeEventArgs e)
+    {
+        errorMessage = null;
+        result = null;
+        var file = e.File;
+
+        if (file.Size > MaxFileSize)
+        {
+            errorMessage = $"Файл слишком большой ({FormatSize(file.Size)}). Максимум — 10 МБ.";
+            return;
+        }
+
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            using var stream = file.OpenReadStream(MaxFileSize);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            result = await FileAnalyzerSvc.AnalyzeFileAsync(file.Name, ms.ToArray());
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Ошибка при чтении файла: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} Б";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} КБ";
+        return $"{bytes / 1024.0 / 1024.0:F1} МБ";
+    }
+
+    private static string RiskBadge(string r) => r switch
+    {
+        "critical" or "high" => "bg-danger",
+        "medium"             => "bg-warning text-dark",
+        "low"                => "bg-secondary",
+        _                    => "bg-success"
+    };
+
+    private static string RiskLabel(string r) => r switch
+    {
+        "critical" => "Критический",
+        "high"     => "Высокий",
+        "medium"   => "Средний",
+        "low"      => "Низкий",
+        _          => "Безопасно"
+    };
+
+    private static int RiskOrder(string r) => r switch { "critical" => 3, "high" => 2, "medium" => 1, _ => 0 };
+
+    private static string SeverityBadge(string s) => s switch
+    {
+        "critical" => "bg-danger",
+        "high"     => "bg-warning text-dark",
+        "medium"   => "bg-info text-dark",
+        _          => "bg-secondary"
+    };
+
+    private static string SeverityLabel(string s) => s switch
+    {
+        "critical" => "Критический",
+        "high"     => "Высокий",
+        "medium"   => "Средний",
+        _          => "Низкий"
+    };
+}

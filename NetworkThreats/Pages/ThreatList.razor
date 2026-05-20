@@ -1,0 +1,153 @@
+@page "/threats"
+@inject IThreatService ThreatService
+@inject ICategoryService CategoryService
+@inject NavigationManager Nav
+@using NetworkThreats.Models
+@using NetworkThreats.Services
+@using Microsoft.AspNetCore.WebUtilities
+
+<PageTitle>Угрозы</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">
+        @if (selectedCategoryId != 0 && activeCategoryName is not null)
+        {
+            <span>Угрозы: @activeCategoryName</span>
+        }
+        else
+        {
+            <span>Классификатор сетевых угроз</span>
+        }
+    </h3>
+    <a class="btn btn-primary" href="/threats/create">+ Добавить угрозу</a>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-4">
+        <label class="form-label">Категория</label>
+        <select class="form-select" @bind="selectedCategoryId" @bind:after="ApplyFilter">
+            <option value="0">Все категории</option>
+            @foreach (var cat in categories)
+            {
+                <option value="@cat.Id">@cat.Name</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Уровень угрозы</label>
+        <select class="form-select" @bind="selectedSeverity" @bind:after="ApplyFilter">
+            <option value="">Все уровни</option>
+            <option value="critical">Критический</option>
+            <option value="high">Высокий</option>
+            <option value="medium">Средний</option>
+            <option value="low">Низкий</option>
+        </select>
+    </div>
+    @if (selectedCategoryId != 0 || !string.IsNullOrEmpty(selectedSeverity))
+    {
+        <div class="col-md-4 d-flex align-items-end">
+            <button class="btn btn-outline-secondary" @onclick="ResetFilter">
+                <i class="bi bi-x-circle me-1"></i>Сбросить фильтр
+            </button>
+        </div>
+    }
+</div>
+
+@if (threats is null)
+{
+    <p>Загрузка...</p>
+}
+else if (!threats.Any())
+{
+    <div class="alert alert-info">Угрозы не найдены.</div>
+}
+else
+{
+    <table class="table table-striped table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th>Название</th>
+                <th>Категория</th>
+                <th>Уровень угрозы</th>
+                <th>Год обнаружения</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var threat in threats)
+            {
+                <tr>
+                    <td>@threat.Name</td>
+                    <td>@threat.CategoryName</td>
+                    <td><span class="badge @SeverityBadge(threat.Severity)">@SeverityLabel(threat.Severity)</span></td>
+                    <td>@(threat.FirstDetectedYear?.ToString() ?? "—")</td>
+                    <td>
+                        <a class="btn btn-sm btn-outline-primary" href="/threats/@threat.Id">Подробнее</a>
+                        <a class="btn btn-sm btn-outline-secondary" href="/threats/@threat.Id/edit">Изменить</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private IEnumerable<ThreatDto>? threats;
+    private IEnumerable<ThreatCategoryDto> categories = [];
+    private int selectedCategoryId;
+    private string selectedSeverity = "";
+    private string? activeCategoryName;
+
+    protected override async Task OnInitializedAsync()
+    {
+        categories = await CategoryService.GetAllAsync();
+
+        // Читаем categoryId из URL (?categoryId=2)
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+        if (QueryHelpers.ParseQuery(uri.Query).TryGetValue("categoryId", out var val)
+            && int.TryParse(val, out var id))
+        {
+            selectedCategoryId = id;
+        }
+
+        await ApplyFilter();
+    }
+
+    private async Task ApplyFilter()
+    {
+        activeCategoryName = selectedCategoryId != 0
+            ? categories.FirstOrDefault(c => c.Id == selectedCategoryId)?.Name
+            : null;
+
+        if (selectedCategoryId != 0)
+            threats = await ThreatService.GetByCategoryAsync(selectedCategoryId);
+        else if (!string.IsNullOrEmpty(selectedSeverity))
+            threats = await ThreatService.GetBySeverityAsync(selectedSeverity);
+        else
+            threats = await ThreatService.GetAllAsync();
+    }
+
+    private async Task ResetFilter()
+    {
+        selectedCategoryId = 0;
+        selectedSeverity = "";
+        await ApplyFilter();
+        Nav.NavigateTo("/threats");
+    }
+
+    private static string SeverityBadge(string severity) => severity switch
+    {
+        "critical" => "bg-danger",
+        "high"     => "bg-warning text-dark",
+        "medium"   => "bg-info text-dark",
+        _          => "bg-secondary"
+    };
+
+    private static string SeverityLabel(string severity) => severity switch
+    {
+        "critical" => "Критический",
+        "high"     => "Высокий",
+        "medium"   => "Средний",
+        _          => "Низкий"
+    };
+}

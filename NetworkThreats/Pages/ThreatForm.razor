@@ -1,0 +1,94 @@
+@page "/threats/create"
+@page "/threats/{Id:int}/edit"
+@inject IThreatService ThreatService
+@inject ICategoryService CategoryService
+@inject NavigationManager Nav
+@using NetworkThreats.Models
+@using NetworkThreats.Services
+
+<PageTitle>@(Id == 0 ? "Новая угроза" : "Редактирование угрозы")</PageTitle>
+
+<h3>@(Id == 0 ? "Добавить угрозу" : "Редактировать угрозу")</h3>
+
+<div class="row">
+    <div class="col-md-6">
+        <EditForm Model="model" OnValidSubmit="HandleSubmit">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="text-danger" />
+
+            <div class="mb-3">
+                <label class="form-label">Название *</label>
+                <InputText class="form-control" @bind-Value="model.Name" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Категория *</label>
+                <InputSelect class="form-select" @bind-Value="model.CategoryId">
+                    <option value="0">— выберите —</option>
+                    @foreach (var cat in categories)
+                    {
+                        <option value="@cat.Id">@cat.Name</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Описание *</label>
+                <InputTextArea class="form-control" rows="4" @bind-Value="model.ShortDescription" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Уровень угрозы</label>
+                <InputSelect class="form-select" @bind-Value="model.Severity">
+                    <option value="low">Низкий</option>
+                    <option value="medium">Средний</option>
+                    <option value="high">Высокий</option>
+                    <option value="critical">Критический</option>
+                </InputSelect>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Вектор атаки</label>
+                <InputText class="form-control" @bind-Value="model.AttackVector" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Год первого обнаружения</label>
+                <InputNumber class="form-control" @bind-Value="model.FirstDetectedYear" />
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Сохранить</button>
+                <a class="btn btn-outline-secondary" href="/threats">Отмена</a>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Threat model = new() { Severity = "medium" };
+    private IEnumerable<ThreatCategoryDto> categories = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        categories = await CategoryService.GetAllAsync();
+
+        if (Id != 0)
+        {
+            var existing = await ThreatService.GetWithDetailsAsync(Id);
+            if (existing is not null) model = existing;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (Id == 0)
+            await ThreatService.CreateAsync(model);
+        else
+            await ThreatService.UpdateAsync(model);
+
+        Nav.NavigateTo("/threats");
+    }
+}
