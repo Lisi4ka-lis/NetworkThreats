@@ -4,12 +4,14 @@
 [![Blazor](https://img.shields.io/badge/Blazor-Server-512BD4?logo=blazor)](https://blazor.net/)
 [![EF Core](https://img.shields.io/badge/EF_Core-8.0-512BD4?logo=nuget)](https://learn.microsoft.com/ef/core/)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker)](https://www.docker.com/)
+[![Docker Hub](https://img.shields.io/badge/Docker_Hub-lisenjik%2Fnetwork--threats--api-2496ED?logo=docker)](https://hub.docker.com/r/lisenjik/network-threats-api)
 [![GitHub](https://img.shields.io/badge/GitHub-Lisi4ka--lis%2FNetworkThreats-181717?logo=github)](https://github.com/Lisi4ka-lis/NetworkThreats)
 
 Веб-приложение для управления базой знаний по сетевым угрозам, методам атак и способам защиты.
 Реализован анализатор текста по правилам и статический анализатор загружаемых файлов.
 
 **Репозиторий:** https://github.com/Lisi4ka-lis/NetworkThreats  
+**Docker Hub:** https://hub.docker.com/r/lisenjik/network-threats-api  
 **Дисциплина:** «Кроссплатформенная среда исполнения программного обеспечения»  
 **Кафедра КБ-4** — РТУ МИРЭА
 
@@ -255,7 +257,7 @@ dotnet run --project NetworkThreats
 ### Через Docker Compose (рекомендуется)
 
 ```bash
-# Сборка образа и запуск контейнера
+# Сборка образа и запуск контейнера (app + PostgreSQL + Redis)
 docker-compose up -d --build
 
 # Просмотр логов
@@ -266,18 +268,31 @@ docker-compose down
 ```
 
 Приложение: **http://localhost:8080**  
-База данных сохраняется в именованном томе `db_data` и не теряется при перезапуске.
+База данных сохраняется в именованном томе `pg_data` и не теряется при перезапуске.
+
+### Готовый образ с Docker Hub
+
+```bash
+# Скачать и запустить готовый образ (SQLite, без PostgreSQL)
+docker pull lisenjik/network-threats-api:latest
+
+docker run -d \
+  -p 8080:8080 \
+  --name networkthreats \
+  lisenjik/network-threats-api:latest
+```
+
+Образ: **https://hub.docker.com/r/lisenjik/network-threats-api**
 
 ### Только Docker (без Compose)
 
 ```bash
-# Собрать образ
+# Собрать образ из исходников
 docker build -t networkthreats:latest .
 
-# Запустить контейнер с сохранением БД
+# Запустить контейнер
 docker run -d \
   -p 8080:8080 \
-  -v networkthreats_data:/app/data \
   --name networkthreats \
   networkthreats:latest
 ```
